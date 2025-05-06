@@ -30,8 +30,7 @@ end
 
 ```elixir
 defmodule MyGRPCService do
-  use MyService.Service
-
+  use GRPC.Server, service: MyService.Service
   alias GrpcStream
 
   def route_chat(req_enum, stream) do
@@ -53,8 +52,7 @@ You can enhance the stream by passing an unbounded GenStage producer (like Rabbi
 
 ```elixir
 defmodule MyGRPCService do
-  use MyService.Service
-
+  use GRPC.Server, service: MyService.Service
   alias GrpcStream
 
   def stream_events(req_enum, stream) do

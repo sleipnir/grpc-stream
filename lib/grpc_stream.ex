@@ -12,8 +12,7 @@ defmodule GrpcStream do
   ## Example: Basic request-response stream
 
       defmodule MyGRPCService do
-        use MyService.Service
-
+        use GRPC.Server, service: MyService.Service
         alias GrpcStream
 
         def route_chat(req_enum, stream) do
@@ -35,8 +34,7 @@ defmodule GrpcStream do
   in addition to the gRPC stream.
 
       defmodule MyGRPCService do
-        use MyService.Service
-
+        use GRPC.Server, service: MyService.Service
         alias GrpcStream
 
         def stream_events(req_enum, stream) do
