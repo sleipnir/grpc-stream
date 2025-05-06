@@ -61,8 +61,6 @@ defmodule MyGRPCService do
     GrpcStream.from(req_enum, unbounded_sink_pid: rabbit_producer, max_demand: 10)
     |> Flow.map(&transform_event/1)
     |> GrpcStream.materialize(stream)
-
-    stream
   end
 
   defp transform_event({_, grpc_msg}), do: grpc_msg

@@ -22,8 +22,6 @@ defmodule GrpcStream do
             # and prepare a response
           end)
           |> GrpcStream.materialize(stream)
-
-          stream
         end
       end
 
