@@ -56,7 +56,7 @@ defmodule MyGRPCService do
   def stream_events(req_enum, stream) do
     {:ok, rabbit_producer} = MyApp.RabbitMQ.Producer.start_link([])
 
-    GrpcStream.from(req_enum, unbounded_sink_pid: rabbit_producer, max_demand: 10)
+    GrpcStream.from(req_enum, join_producer: rabbit_producer, max_demand: 10)
     |> GrpcStream.map(&transform_event/1)
     |> GrpcStream.materialize(stream)
   end
