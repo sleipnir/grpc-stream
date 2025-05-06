@@ -51,6 +51,10 @@ defmodule GrpcStream do
   """
   alias GRPC.Server.Stream
 
+  defstruct flow: nil
+
+  @type t :: %__MODULE__{flow: Flow.t()}
+
   @doc """
   Converts a gRPC request enumerable into a `Flow` pipeline with support for backpressure.
 
@@ -76,19 +80,29 @@ defmodule GrpcStream do
   def from(req_enum, opts \\ []) do
     unbounded_producer = Keyword.get(opts, :unbounded_sink_pid)
 
-    {:ok, pid} = GRPCStream.Producer.start_link(req_enum, opts)
+    case unbounded_producer do
+      unbounded_pid when is_pid(unbounded_pid) ->
+        {:ok, pid} = GRPCStream.Producer.start_link(req_enum, opts)
 
-    producers =
-      case unbounded_producer do
-        other_pid when is_pid(other_pid) ->
-          [pid, other_pid]
+        flow = Flow.from_stages([pid, unbounded_pid], opts)
+        %__MODULE__{flow: flow}
 
-        _ ->
-          [pid]
-      end
-
-    Flow.from_stages(producers, opts)
+      _ ->
+        flow = Flow.from_enumerable(req_enum, opts)
+        %__MODULE__{flow: flow}
+    end
   end
+
+  @doc """
+  Converts a `Flow` into a `GrpcStream`.
+  """
+  @spec from_flow(Flow.t(), Keyword.t()) :: t()
+  def from_flow(%Flow{} = flow, opts \\ []), do: from(flow, opts)
+
+  @doc """
+  Converts a `GrpcStream` into a `Flow`.
+  """
+  def to_flow(%__MODULE__{flow: flow}), do: flow
 
   @doc """
   Sends the results of a `Flow` as gRPC responses using the provided stream.
@@ -104,10 +118,13 @@ defmodule GrpcStream do
       GrpcStream.materialize(flow, stream)
 
   """
-  def materialize(%Flow{} = flow, %Stream{} = from, _opts \\ []) do
+  def materialize(%__MODULE__{flow: flow} = _stream, %Stream{} = from, opts \\ []) do
+    is_dry_run? = Keyword.get(opts, :dry_run, false)
+
     flow
     |> Flow.map(fn msg ->
-      send_response(from, msg)
+      if is_dry_run?, do: :nothing, else: send_response(from, msg)
+
       flow
     end)
     |> Flow.run()
@@ -115,5 +132,46 @@ defmodule GrpcStream do
 
   defp send_response(from, msg) do
     GRPC.Server.send_reply(from, msg)
+  end
+
+  @doc """
+  Applies the given function filtering each input in parallel.
+  """
+  @spec filter(t(), (term -> term)) :: t
+  def filter(%__MODULE__{flow: flow}, filter) do
+    %__MODULE__{flow: Flow.filter(flow, filter)}
+  end
+
+  @spec map(t(), (term -> term)) :: t
+  def map(%__MODULE__{flow: flow}, mapper) do
+    %__MODULE__{flow: Flow.map(flow, mapper)}
+  end
+
+  @doc """
+  Applies the given function mapping each input in parallel and
+  flattening the result, but only one level deep.
+  """
+  @spec flat_map(t, (term -> Enumerable.t())) :: t
+  def flat_map(%__MODULE__{flow: flow}, flat_mapper) do
+    %__MODULE__{flow: Flow.flat_map(flow, flat_mapper)}
+  end
+
+  @doc """
+  Applies the given function rejecting each input in parallel.
+  """
+  @spec reject(t, (term -> term)) :: t
+  def reject(%__MODULE__{flow: flow}, filter) do
+    %__MODULE__{flow: Flow.reject(flow, filter)}
+  end
+
+  @doc """
+  Reduces the given values with the given accumulator.
+
+  `acc_fun` is a function that receives no arguments and returns
+  the actual accumulator.
+  """
+  @spec reduce(t, (-> acc), (term, acc -> acc)) :: t when acc: term()
+  def reduce(%__MODULE__{flow: flow}, acc_fun, reducer_fun) do
+    %__MODULE__{flow: Flow.reduce(flow, acc_fun, reducer_fun)}
   end
 end

@@ -1,12 +1,12 @@
 # GrpcStream
 
-**Backpressure-enabled gRPC streaming adapter for Elixir using GenStage and Flow**
+**Backpressure-enabled gRPC streaming adapter for Elixir using GenStage and GrpcStream**
 
-`GrpcStream` is an Elixir module designed to simplify gRPC server-side streaming by transforming incoming gRPC streams into `Flow` pipelines, offering backpressure and integration with additional unbounded producers (e.g., RabbitMQ, Kafka, or other `GenStage` producer).
+`GrpcStream` is an Elixir module designed to simplify gRPC server-side streaming by transforming incoming gRPC streams into `GrpcStream` pipelines, offering backpressure and integration with additional unbounded producers (e.g., RabbitMQ, Kafka, or other `GenStage` producer).
 
 ## ✨ Features
 
-- Convert gRPC streaming requests into `Flow` pipelines.
+- Convert gRPC streaming requests into `GrpcStream` pipelines.
 - Full support for GenStage backpressure.
 - Plug in additional unbounded `GenStage` producers for infinite/event-driven streaming.
 - Send processed messages back to clients via gRPC streams.
@@ -35,7 +35,7 @@ defmodule MyGRPCService do
 
   def route_chat(req_enum, stream) do
     GrpcStream.from(req_enum, max_demand: 10)
-    |> Flow.map(fn note ->
+    |> GrpcStream.map(fn note ->
       # Process incoming gRPC message
       %MyProto.Note{message: "[echo] #{note.message}"}
     end)
@@ -57,7 +57,7 @@ defmodule MyGRPCService do
     {:ok, rabbit_producer} = MyApp.RabbitMQ.Producer.start_link([])
 
     GrpcStream.from(req_enum, unbounded_sink_pid: rabbit_producer, max_demand: 10)
-    |> Flow.map(&transform_event/1)
+    |> GrpcStream.map(&transform_event/1)
     |> GrpcStream.materialize(stream)
   end
 
