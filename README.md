@@ -40,8 +40,6 @@ defmodule MyGRPCService do
       %MyProto.Note{message: "[echo] #{note.message}"}
     end)
     |> GrpcStream.materialize(stream)
-
-    stream
   end
 end
 ``` 
