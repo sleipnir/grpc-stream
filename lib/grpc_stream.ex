@@ -135,6 +135,51 @@ defmodule GrpcStream do
   end
 
   @doc """
+  Sends a stream item to the given target process and waits for a response.
+  The target process must be a PID. The payload following in the tuple {:request, item, from}
+  is sent to the target process, where `item` is the item from the GrpcStream and `from` is the
+  PID of the current process. 
+  In other words, the contract is to send {:request, item, from_pid} and wait for a response in the format {:response, msg}
+
+  This function also accepts a GenServer module as target. In this case the payload following in the tuple {:request, item}
+  is sent to the target GenServer, where `item` is the item from the GrpcStream.
+  In other words, for GenServer's the contract is to send {:request, item} and wait for a response in the format {:response, msg}
+  """
+  def ask(stream, target, timeout \\ 5000)
+
+  def ask(%__MODULE__{flow: flow}, target, timeout) when is_pid(target) do
+    mapper = fn item ->
+      if Process.alive?(target) do
+        send(target, {:request, item, self()})
+
+        result =
+          receive do
+            {:response, res} -> res
+          after
+            timeout -> {:error, :timeout}
+          end
+
+        result
+      end
+    end
+
+    %__MODULE__{flow: Flow.map(flow, mapper)}
+  end
+
+  def ask(%__MODULE__{flow: flow}, target, timeout) when is_atom(target) do
+    if not function_exported?(target, :handle_call, 3) do
+      raise ArgumentError, "#{inspect(target)} must implement the GenServer behavior"
+    end
+
+    mapper = fn item ->
+      {:response, res} = GenServer.call(target, {:request, item}, timeout)
+      res
+    end
+
+    %__MODULE__{flow: Flow.map(flow, mapper)}
+  end
+
+  @doc """
   Applies the given function filtering each input in parallel.
   """
   @spec filter(t(), (term -> term)) :: t
