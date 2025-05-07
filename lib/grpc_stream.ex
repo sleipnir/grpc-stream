@@ -27,7 +27,7 @@ defmodule GrpcStream do
 
   ## Example: Using an unbounded producer
 
-  You can pass an already-started `GenStage` producer to `:join_producer`.
+  You can pass an already-started `GenStage` producer to `:join_with`.
   This is useful if you want to consume from an infinite or external event source
   in addition to the gRPC stream.
 
@@ -39,7 +39,7 @@ defmodule GrpcStream do
           # Assuming you have a RabbitMQ or another unbounded source of data producer that is a GenStage producer
           {:ok, rabbitmq_producer} = MyApp.RabbitMQ.Producer.start_link([])
 
-          GrpcStream.from(req_enum, join_producer: rabbit_producer, max_demand: 10)
+          GrpcStream.from(req_enum, join_with: rabbit_producer, max_demand: 10)
           |> Flow.map(&transform_event/1)
           |> GrpcStream.materialize(stream)
         end
@@ -65,7 +65,7 @@ defmodule GrpcStream do
 
   ## Options
 
-    - `:join_producer` - (optional) An additional producer stage PID to include in the Flow.
+    - `:join_with` - (optional) An additional producer stage PID to include in the Flow.
 
   ## Returns
 
@@ -78,7 +78,7 @@ defmodule GrpcStream do
   """
   @spec from(Enumerable.t(), Keyword.t()) :: Flow.t()
   def from(req_enum, opts \\ []) do
-    unbounded_producer = Keyword.get(opts, :join_producer)
+    unbounded_producer = Keyword.get(opts, :join_with)
 
     case unbounded_producer do
       unbounded_pid when is_pid(unbounded_pid) ->

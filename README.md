@@ -56,7 +56,7 @@ defmodule MyGRPCService do
   def stream_events(req_enum, stream) do
     {:ok, rabbit_producer} = MyApp.RabbitMQ.Producer.start_link([])
 
-    GrpcStream.from(req_enum, join_producer: rabbit_producer, max_demand: 10)
+    GrpcStream.from(req_enum, join_with: rabbit_producer, max_demand: 10)
     |> GrpcStream.map(&transform_event/1)
     |> GrpcStream.materialize(stream)
   end
@@ -160,7 +160,7 @@ defmodule MyGRPCService do
     TransactionService.start_link()
     
     GrpcStream.from(req_enum, 
-      join_producer: kafka_producer,
+      join_with: kafka_producer,
       max_demand: 20
     )
     |> GrpcStream.ask(TransactionService)  # Validate via GenServer
