@@ -6,6 +6,14 @@ defmodule StreamServer.GRPC.EchoServiceHandler do
   alias Stream.HelloRequest
   alias Stream.HelloReply
 
+  def say_unary_hello(request, stream) do
+    GrpcStream.from(request)
+    |> GrpcStream.map(fn %HelloRequest{} = hello ->
+      %HelloReply{message: "[echo] #{hello.name}"}
+    end)
+    |> GrpcStream.materialize(stream)
+  end
+
   def say_server_hello(request, stream) do
     GrpcStream.from(request)
     |> GrpcStream.map(fn %HelloRequest{} = hello ->
