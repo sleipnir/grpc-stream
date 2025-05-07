@@ -11,7 +11,7 @@ defmodule GrpcStreamTest do
         |> GrpcStream.map(& &1)
         |> GrpcStream.materialize(%GRPC.Server.Stream{}, dry_run: true)
 
-      assert result == :ok
+      assert result == 1
     end
 
     test "from/2 creates a flow from enumerable input" do

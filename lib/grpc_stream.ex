@@ -84,8 +84,13 @@ defmodule GrpcStream do
   def from(input, opts \\ [])
 
   def from(%Elixir.Stream{} = input, opts), do: build_grpc_stream(input, opts)
+
   def from(input, opts) when is_list(input), do: build_grpc_stream(input, opts)
-  def from(input, opts) when not is_nil(input), do: from([input], opts)
+
+  def from(input, opts) when not is_nil(input) do
+    opts = Keyword.merge(opts, unary: true)
+    from([input], opts)
+  end
 
   defp build_grpc_stream(input, opts) do
     unbounded_producer = Keyword.get(opts, :join_with)
@@ -139,17 +144,30 @@ defmodule GrpcStream do
       GrpcStream.materialize(flow, stream)
 
   """
-  @spec materialize(t(), Stream.t(), Keyword.t()) :: :ok
-  def materialize(%__MODULE__{flow: flow} = _stream, %Stream{} = from, opts \\ []) do
+  @spec materialize(t(), Stream.t(), Keyword.t()) :: :ok | any()
+  def materialize(
+        %__MODULE__{flow: flow, options: flow_opts} = _stream,
+        %Stream{} = from,
+        opts \\ []
+      ) do
     is_dry_run? = Keyword.get(opts, :dry_run, false)
+    is_unary? = Keyword.get(flow_opts, :unary, false)
 
-    flow
-    |> Flow.map(fn msg ->
-      if is_dry_run?, do: :nothing, else: send_response(from, msg)
+    case is_unary? do
+      true ->
+        flow
+        |> Enum.to_list()
+        |> List.flatten()
+        |> List.first()
 
-      flow
-    end)
-    |> Flow.run()
+      _ ->
+        flow
+        |> Flow.map(fn msg ->
+          if is_dry_run?, do: :nothing, else: send_response(from, msg)
+          flow
+        end)
+        |> Flow.run()
+    end
   end
 
   defp send_response(from, msg) do
@@ -170,7 +188,7 @@ defmodule GrpcStream do
   @spec ask(t(), pid | atom, non_neg_integer) :: t() | {:error, item(), reason()}
   def ask(stream, target, timeout \\ 5000)
 
-  def ask(%__MODULE__{flow: flow}, target, timeout) when is_pid(target) do
+  def ask(%__MODULE__{flow: flow} = stream, target, timeout) when is_pid(target) do
     mapper = fn item ->
       if Process.alive?(target) do
         send(target, {:request, item, self()})
@@ -188,10 +206,10 @@ defmodule GrpcStream do
       end
     end
 
-    %__MODULE__{flow: Flow.map(flow, mapper)}
+    %__MODULE__{stream | flow: Flow.map(flow, mapper)}
   end
 
-  def ask(%__MODULE__{flow: flow}, target, timeout) when is_atom(target) do
+  def ask(%__MODULE__{flow: flow} = stream, target, timeout) when is_atom(target) do
     mapper = fn item ->
       if function_exported?(target, :handle_call, 3) do
         try do
@@ -212,7 +230,7 @@ defmodule GrpcStream do
       end
     end
 
-    %__MODULE__{flow: Flow.map(flow, mapper)}
+    %__MODULE__{stream | flow: Flow.map(flow, mapper)}
   end
 
   @doc """
@@ -227,7 +245,7 @@ defmodule GrpcStream do
   @spec ask!(t(), pid | atom, non_neg_integer) :: t()
   def ask!(stream, target, timeout \\ 5000)
 
-  def ask!(%__MODULE__{flow: flow}, target, timeout) when is_pid(target) do
+  def ask!(%__MODULE__{flow: flow} = stream, target, timeout) when is_pid(target) do
     mapper = fn item ->
       if Process.alive?(target) do
         send(target, {:request, item, self()})
@@ -246,10 +264,10 @@ defmodule GrpcStream do
       end
     end
 
-    %__MODULE__{flow: Flow.map(flow, mapper)}
+    %__MODULE__{stream | flow: Flow.map(flow, mapper)}
   end
 
-  def ask!(%__MODULE__{flow: flow}, target, timeout) when is_atom(target) do
+  def ask!(%__MODULE__{flow: flow} = stream, target, timeout) when is_atom(target) do
     if not function_exported?(target, :handle_call, 3) do
       raise ArgumentError, "#{inspect(target)} must implement the GenServer behavior"
     end
@@ -265,15 +283,15 @@ defmodule GrpcStream do
       end
     end
 
-    %__MODULE__{flow: Flow.map(flow, mapper)}
+    %__MODULE__{stream | flow: Flow.map(flow, mapper)}
   end
 
   @doc """
   Applies the given function filtering each input in parallel.
   """
   @spec filter(t(), (term -> term)) :: t
-  def filter(%__MODULE__{flow: flow}, filter) do
-    %__MODULE__{flow: Flow.filter(flow, filter)}
+  def filter(%__MODULE__{flow: flow} = stream, filter) do
+    %__MODULE__{stream | flow: Flow.filter(flow, filter)}
   end
 
   @doc """
@@ -281,16 +299,16 @@ defmodule GrpcStream do
   flattening the result, but only one level deep.
   """
   @spec flat_map(t, (term -> Enumerable.t())) :: t()
-  def flat_map(%__MODULE__{flow: flow}, flat_mapper) do
-    %__MODULE__{flow: Flow.flat_map(flow, flat_mapper)}
+  def flat_map(%__MODULE__{flow: flow} = stream, flat_mapper) do
+    %__MODULE__{stream | flow: Flow.flat_map(flow, flat_mapper)}
   end
 
   @doc """
   Applies the given function mapping each input.
   """
   @spec map(t(), (term -> term)) :: t()
-  def map(%__MODULE__{flow: flow}, mapper) do
-    %__MODULE__{flow: Flow.map(flow, mapper)}
+  def map(%__MODULE__{flow: flow} = stream, mapper) do
+    %__MODULE__{stream | flow: Flow.map(flow, mapper)}
   end
 
   @doc """
@@ -311,8 +329,8 @@ defmodule GrpcStream do
   are typically called "embarrassingly parallel" problems.
   """
   @spec partition(t(), keyword()) :: t()
-  def partition(%__MODULE__{flow: flow}, options \\ []) do
-    %__MODULE__{flow: Flow.partition(flow, options)}
+  def partition(%__MODULE__{flow: flow} = stream, options \\ []) do
+    %__MODULE__{stream | flow: Flow.partition(flow, options)}
   end
 
   @doc """
@@ -322,31 +340,31 @@ defmodule GrpcStream do
   the actual accumulator.
   """
   @spec reduce(t, (-> acc), (term, acc -> acc)) :: t when acc: term()
-  def reduce(%__MODULE__{flow: flow}, acc_fun, reducer_fun) do
-    %__MODULE__{flow: Flow.reduce(flow, acc_fun, reducer_fun)}
+  def reduce(%__MODULE__{flow: flow} = stream, acc_fun, reducer_fun) do
+    %__MODULE__{stream | flow: Flow.reduce(flow, acc_fun, reducer_fun)}
   end
 
   @doc """
   Applies the given function rejecting each input in parallel.
   """
   @spec reject(t, (term -> term)) :: t
-  def reject(%__MODULE__{flow: flow}, filter) do
-    %__MODULE__{flow: Flow.reject(flow, filter)}
+  def reject(%__MODULE__{flow: flow} = stream, filter) do
+    %__MODULE__{stream | flow: Flow.reject(flow, filter)}
   end
 
   @doc """
   Only emit unique events.
   """
   @spec uniq(t) :: t
-  def uniq(%__MODULE__{flow: flow}) do
-    %__MODULE__{flow: Flow.uniq(flow)}
+  def uniq(%__MODULE__{flow: flow} = stream) do
+    %__MODULE__{stream | flow: Flow.uniq(flow)}
   end
 
   @doc """
   Only emit events that are unique according to the `by` function.
   """
   @spec uniq_by(t, (term -> term)) :: t
-  def uniq_by(%__MODULE__{flow: flow}, fun) do
-    %__MODULE__{flow: Flow.uniq_by(flow, fun)}
+  def uniq_by(%__MODULE__{flow: flow} = stream, fun) do
+    %__MODULE__{stream | flow: Flow.uniq_by(flow, fun)}
   end
 end
