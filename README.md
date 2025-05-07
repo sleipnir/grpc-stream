@@ -172,3 +172,5 @@ defmodule MyGRPCService do
   end
 end
 ``` 
+
+See more in [tests](./test/grpc_stream_test.exs)
