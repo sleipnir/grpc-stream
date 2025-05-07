@@ -83,7 +83,11 @@ defmodule GrpcStream do
   @spec from(Enumerable.t(), Keyword.t()) :: Flow.t()
   def from(input, opts \\ [])
 
-  def from(input, opts) when is_list(input) do
+  def from(%Elixir.Stream{} = input, opts), do: build_grpc_stream(input, opts)
+  def from(input, opts) when is_list(input), do: build_grpc_stream(input, opts)
+  def from(input, opts) when not is_nil(input), do: from([input], opts)
+
+  defp build_grpc_stream(input, opts) do
     unbounded_producer = Keyword.get(opts, :join_with)
 
     case unbounded_producer do
@@ -98,8 +102,6 @@ defmodule GrpcStream do
         %__MODULE__{flow: flow, options: opts}
     end
   end
-
-  def from(input, opts), do: from([input], opts)
 
   @doc """
   Converts a `Flow` into a `GrpcStream`.
@@ -116,8 +118,12 @@ defmodule GrpcStream do
   @doc """
   Converts a `GrpcStream` into a `Flow`.
   """
-  @spec to_flow(t()) :: Flow.t()
-  def to_flow(%__MODULE__{flow: flow}), do: flow
+  @spec to_flow!(t()) :: Flow.t()
+  def to_flow!(%__MODULE__{flow: nil}) do
+    raise ArgumentError, "GrpcStream has no flow, initialize it with from/2"
+  end
+
+  def to_flow!(%__MODULE__{flow: flow}), do: flow
 
   @doc """
   Sends the results of a `Flow` as gRPC responses using the provided stream.
