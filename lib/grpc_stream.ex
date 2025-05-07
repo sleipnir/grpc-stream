@@ -321,4 +321,20 @@ defmodule GrpcStream do
   def reject(%__MODULE__{flow: flow}, filter) do
     %__MODULE__{flow: Flow.reject(flow, filter)}
   end
+
+  @doc """
+  Only emit unique events.
+  """
+  @spec uniq(t) :: t
+  def uniq(%__MODULE__{flow: flow}) do
+    %__MODULE__{flow: Flow.uniq(flow)}
+  end
+
+  @doc """
+  Only emit events that are unique according to the `by` function.
+  """
+  @spec uniq_by(t, (term -> term)) :: t
+  def uniq_by(%__MODULE__{flow: flow}, fun) do
+    %__MODULE__{flow: Flow.uniq_by(flow, fun)}
+  end
 end

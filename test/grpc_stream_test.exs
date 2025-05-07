@@ -135,4 +135,47 @@ defmodule GrpcStreamTest do
       assert result == [2, 4]
     end
   end
+
+  describe "test complex operations" do
+    test "pipeline with all GrpcStream operators" do
+      target =
+        spawn(fn ->
+          receive_loop()
+        end)
+
+      input = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+      result =
+        input
+        |> GrpcStream.from()
+        # 2..11
+        |> GrpcStream.map(&(&1 + 1))
+        # [2,4,3,6,4,8,...]
+        |> GrpcStream.flat_map(&[&1, &1 * 2])
+        # keep evens
+        |> GrpcStream.filter(&(rem(&1, 2) == 0))
+        # remove >10
+        |> GrpcStream.reject(&(&1 > 10))
+        # remove duplicates
+        |> GrpcStream.uniq()
+        # multiply by 10 via process
+        |> GrpcStream.ask(target)
+        |> GrpcStream.partition()
+        |> GrpcStream.reduce(fn -> [] end, fn i, acc -> [i | acc] end)
+        |> GrpcStream.to_flow()
+        |> Enum.to_list()
+        |> List.flatten()
+        |> Enum.sort()
+
+      assert result == [20, 40, 60, 80, 100]
+    end
+  end
+
+  defp receive_loop do
+    receive do
+      {:request, item, from} ->
+        send(from, {:response, item * 10})
+        receive_loop()
+    end
+  end
 end
