@@ -51,9 +51,9 @@ defmodule GrpcStream do
   """
   alias GRPC.Server.Stream
 
-  defstruct flow: nil
+  defstruct flow: nil, options: []
 
-  @type t :: %__MODULE__{flow: Flow.t()}
+  @type t :: %__MODULE__{flow: Flow.t(), options: Keyword.t()}
 
   @type item :: any()
 
@@ -91,11 +91,11 @@ defmodule GrpcStream do
         {:ok, pid} = GRPCStream.Producer.start_link(input, opts)
 
         flow = Flow.from_stages([pid, unbounded_pid], opts)
-        %__MODULE__{flow: flow}
+        %__MODULE__{flow: flow, options: opts}
 
       _ ->
         flow = Flow.from_enumerable(input, opts)
-        %__MODULE__{flow: flow}
+        %__MODULE__{flow: flow, options: opts}
     end
   end
 
@@ -104,8 +104,14 @@ defmodule GrpcStream do
   @doc """
   Converts a `Flow` into a `GrpcStream`.
   """
-  @spec from_flow(Flow.t(), Keyword.t()) :: t()
-  def from_flow(%Flow{} = flow, opts \\ []), do: from(flow, opts)
+  @spec from_flow!(Flow.t(), Keyword.t()) :: t()
+  def from_flow!(%Flow{} = flow, opts \\ []) do
+    if Keyword.has_key?(opts, :join_with) do
+      raise ArgumentError, "join_with option is not supported for Flow input"
+    end
+
+    %__MODULE__{flow: flow, options: opts}
+  end
 
   @doc """
   Converts a `GrpcStream` into a `Flow`.
