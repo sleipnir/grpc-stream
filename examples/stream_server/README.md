@@ -38,12 +38,12 @@ defmodule StreamServer.GRPC.EchoServiceHandler do
 
   @spec say_unary_hello(HelloRequest.t(), GRPC.Server.Stream.t()) :: any()
   def say_unary_hello(request, materializer) do
-    GrpcStream.from(request, unary: true)
-    |> GrpcStream.ask(TransformerServer) # call GenServer and get response
-    |> GrpcStream.map(fn %HelloReply{} = reply ->
+    GRPCStream.from(request, unary: true)
+    |> GRPCStream.ask(TransformerServer) # call GenServer and get response
+    |> GRPCStream.map(fn %HelloReply{} = reply ->
       %HelloReply{message: "[Reply] #{reply.message}"}
     end)
-    |> GrpcStream.run_with(materializer)
+    |> GRPCStream.run_with(materializer)
   end
 
   @spec say_server_hello(HelloRequest.t(), GRPC.Server.Stream.t()) :: any()
@@ -58,24 +58,24 @@ defmodule StreamServer.GRPC.EchoServiceHandler do
         %HelloReply{message: "[#{index}] I'm the Server ;)"}
       end)
 
-    GrpcStream.from(request, join_with: output_stream)
-    |> GrpcStream.map(fn
+    GRPCStream.from(request, join_with: output_stream)
+    |> GRPCStream.map(fn
       %HelloRequest{} = hello ->
         %HelloReply{message: "Welcome #{hello.name}"}
 
       output_item ->
         output_item
     end)
-    |> GrpcStream.run_with(materializer)
+    |> GRPCStream.run_with(materializer)
   end
 
   @spec say_bid_stream_hello(Elixir.Stream.t(), GRPC.Server.Stream.t()) :: any()
   def say_bid_stream_hello(request, materializer) do
-    GrpcStream.from(request, max_demand: 12500)
-    |> GrpcStream.map(fn %HelloRequest{} = hello ->
+    GRPCStream.from(request, max_demand: 12500)
+    |> GRPCStream.map(fn %HelloRequest{} = hello ->
       %HelloReply{message: "Welcome #{hello.name}"}
     end)
-    |> GrpcStream.run_with(materializer)
+    |> GRPCStream.run_with(materializer)
   end
 end
 ```

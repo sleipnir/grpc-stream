@@ -1,12 +1,12 @@
-# GrpcStream
+# gRPC Stream
 
-**Backpressure-enabled gRPC streaming adapter for Elixir using GenStage and GrpcStream**
+**Backpressure-enabled gRPC streaming adapter for Elixir using GenStage and GRPCStream**
 
-`GrpcStream` is an Elixir module designed to simplify gRPC server-side streaming by transforming incoming gRPC streams into `GrpcStream` pipelines, offering backpressure and integration with additional unbounded producers (e.g., RabbitMQ, Kafka, or other `GenStage` producer).
+`GRPCStream` is an Elixir module designed to simplify gRPC server-side streaming by transforming incoming gRPC streams into `GRPCStream` pipelines, offering backpressure and integration with additional unbounded producers (e.g., RabbitMQ, Kafka, or other `GenStage` producer).
 
 ## ✨ Features
 
-- Convert gRPC streaming requests into `GrpcStream` pipelines.
+- Convert gRPC streaming requests into `GRPCStream` pipelines.
 - Full support for GenStage backpressure.
 - Plug in additional unbounded `GenStage` producers for infinite/event-driven streaming.
 - Send processed messages back to clients via gRPC streams.
@@ -31,15 +31,15 @@ end
 ```elixir
 defmodule MyGRPCService do
   use GRPC.Server, service: MyService.Service
-  alias GrpcStream
+  alias GRPCStream
 
   def route_chat(request, materializer) do
-    GrpcStream.from(request, max_demand: 10)
-    |> GrpcStream.map(fn note ->
+    GRPCStream.from(request, max_demand: 10)
+    |> GRPCStream.map(fn note ->
       # Process incoming gRPC message
       %MyProto.Note{message: "[echo] #{note.message}"}
     end)
-    |> GrpcStream.run_with(materializer)
+    |> GRPCStream.run_with(materializer)
   end
 end
 ``` 
@@ -51,14 +51,14 @@ You can enhance the stream by passing an unbounded GenStage producer (like Rabbi
 ```elixir
 defmodule MyGRPCService do
   use GRPC.Server, service: MyService.Service
-  alias GrpcStream
+  alias GRPCStream
 
   def stream_events(request, materializer) do
     {:ok, rabbit_producer} = MyApp.RabbitMQ.Producer.start_link([])
 
-    GrpcStream.from(request, join_with: rabbit_producer, max_demand: 10)
-    |> GrpcStream.map(&transform_event/1)
-    |> GrpcStream.run_with(materializer)
+    GRPCStream.from(request, join_with: rabbit_producer, max_demand: 10)
+    |> GRPCStream.map(&transform_event/1)
+    |> GRPCStream.run_with(materializer)
   end
 
   defp transform_event({_, grpc_msg}), do: grpc_msg
@@ -88,13 +88,13 @@ defmodule MyGRPCService do
   def chat_stream(req_enum, materializer) do
     handler_pid = ChatHandler.start()
     
-    GrpcStream.from(req_enum)
-    |> GrpcStream.ask(handler_pid)
-    |> GrpcStream.map(fn
+    GRPCStream.from(req_enum)
+    |> GRPCStream.ask(handler_pid)
+    |> GRPCStream.map(fn
       {:error, :timeout} -> %ChatMsg{text: "Server timeout!"}
       response -> %ChatMsg{text: response}
     end)
-    |> GrpcStream.run_with(materializer)
+    |> GRPCStream.run_with(materializer)
   end
 end
 ```
@@ -124,13 +124,13 @@ defmodule MyGRPCService do
   def event_stream(request, materializer) do
     AnalyticsServer.start_link()
     
-    GrpcStream.from(request)
-    |> GrpcStream.ask(AnalyticsServer, 10_000)
-    |> GrpcStream.map(fn
+    GRPCStream.from(request)
+    |> GRPCStream.ask(AnalyticsServer, 10_000)
+    |> GRPCStream.map(fn
       {:error, :timeout} -> %AnalyticEvent{status: :TIMEOUT}
       result -> %AnalyticEvent{data: result}
     end)
-    |> GrpcStream.run_with(materializer)
+    |> GRPCStream.run_with(materializer)
   end
 end
 ```
@@ -159,16 +159,16 @@ defmodule MyGRPCService do
     {:ok, kafka_producer} = MyApp.KafkaProducer.start_link()
     TransactionService.start_link() # or start in another place
     
-    GrpcStream.from(req_enum, 
+    GRPCStream.from(req_enum, 
       join_with: kafka_producer,
       max_demand: 20
     )
-    |> GrpcStream.ask(TransactionService) # Validate via GenServer
-    |> GrpcStream.filter(fn
+    |> GRPCStream.ask(TransactionService) # Validate via GenServer
+    |> GRPCStream.filter(fn
       %TransactionResult{valid: true} -> true
       _ -> false
     end)
-    |> GrpcStream.run_with(materializer)
+    |> GRPCStream.run_with(materializer)
   end
 end
 ``` 

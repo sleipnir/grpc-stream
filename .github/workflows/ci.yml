@@ -1,4 +1,4 @@
-name: GrpcStream CI
+name: GRPCStream CI
 
 on:
   push:

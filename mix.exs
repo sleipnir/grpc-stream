@@ -1,4 +1,4 @@
-defmodule GrpcStream.MixProject do
+defmodule GRPCStream.MixProject do
   use Mix.Project
 
   @app :grpc_stream

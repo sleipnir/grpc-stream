@@ -1,4 +1,4 @@
-defmodule GrpcStream do
+defmodule GRPCStream do
   @moduledoc """
   Adapter module for working with gRPC server-side streaming in Elixir using
   `Flow` with support for backpressure via GenStage.
@@ -13,15 +13,15 @@ defmodule GrpcStream do
 
       defmodule MyGRPCService do
         use GRPC.Server, service: MyService.Service
-        alias GrpcStream
+        alias GRPCStream
 
         def route_chat(input, stream) do
-          GrpcStream.from(input, max_demand: 10)
+          GRPCStream.from(input, max_demand: 10)
           |> Flow.map(fn note ->
             # Process the incoming note
             # and prepare a response
           end)
-          |> GrpcStream.run_with(stream)
+          |> GRPCStream.run_with(stream)
         end
       end
 
@@ -33,15 +33,15 @@ defmodule GrpcStream do
 
       defmodule MyGRPCService do
         use GRPC.Server, service: MyService.Service
-        alias GrpcStream
+        alias GRPCStream
 
         def stream_events(input, stream) do
           # Assuming you have a RabbitMQ or another unbounded source of data producer that is a GenStage producer
           {:ok, rabbitmq_producer} = MyApp.RabbitMQ.Producer.start_link([])
 
-          GrpcStream.from(input, join_with: rabbit_producer, max_demand: 10)
+          GRPCStream.from(input, join_with: rabbit_producer, max_demand: 10)
           |> Flow.map(&transform_event/1)
-          |> GrpcStream.run_with(stream)
+          |> GRPCStream.run_with(stream)
         end
 
         defp transform_event({_, grpc_msg}), do: grpc_msg
@@ -49,6 +49,7 @@ defmodule GrpcStream do
       end
 
   """
+  alias GRPCStream.Operators
   alias GRPC.Server.Stream
 
   defstruct flow: nil, options: []
@@ -78,7 +79,7 @@ defmodule GrpcStream do
 
   ## Example
 
-      flow = GrpcStream.from(request, max_demand: 5)
+      flow = GRPCStream.from(request, max_demand: 5)
 
   """
   @spec from(Enumerable.t(), Keyword.t()) :: Flow.t()
@@ -91,17 +92,23 @@ defmodule GrpcStream do
   def from(input, opts) when not is_nil(input), do: from([input], opts)
 
   defp build_grpc_stream(input, opts) do
+    dispatcher = Keyword.get(opts, :default_dispatcher, GenStage.DemandDispatcher)
+
     flow =
       case Keyword.get(opts, :join_with) do
         pid when is_pid(pid) ->
-          {:ok, input_pid} = GRPCStream.Producer.start_link(input, opts)
-          Flow.from_stages([input_pid, pid], opts)
+          opts = Keyword.drop(opts, [:join_with, :default_dispatcher])
+
+          input_flow = Flow.from_enumerable(input, opts)
+          other_flow = Flow.from_stages([pid], opts)
+          Flow.merge([input_flow, other_flow], dispatcher, opts)
 
         # handle Elixir.Stream joining
         other when is_list(other) or is_function(other) ->
           Flow.from_enumerables([input, other], opts)
 
         _ ->
+          opts = Keyword.drop(opts, [:join_with, :default_dispatcher])
           Flow.from_enumerable(input, opts)
       end
 
@@ -109,7 +116,7 @@ defmodule GrpcStream do
   end
 
   @doc """
-  Converts a `Flow` into a `GrpcStream`.
+  Converts a `Flow` into a `GRPCStream`.
   """
   @spec from_flow!(Flow.t(), Keyword.t()) :: t()
   def from_flow!(%Flow{} = flow, opts \\ []) do
@@ -121,11 +128,11 @@ defmodule GrpcStream do
   end
 
   @doc """
-  Converts a `GrpcStream` into a `Flow`.
+  Converts a `GRPCStream` into a `Flow`.
   """
   @spec to_flow!(t()) :: Flow.t()
   def to_flow!(%__MODULE__{flow: nil}) do
-    raise ArgumentError, "GrpcStream has no flow, initialize it with from/2"
+    raise ArgumentError, "GRPCStream has no flow, initialize it with from/2"
   end
 
   def to_flow!(%__MODULE__{flow: flow}), do: flow
@@ -141,7 +148,7 @@ defmodule GrpcStream do
 
   ## Example
 
-      GrpcStream.run_with(flow, stream)
+      GRPCStream.run_with(flow, stream)
 
   """
   @spec run_with(t(), Stream.t(), Keyword.t()) :: :ok | any()
@@ -175,61 +182,16 @@ defmodule GrpcStream do
   @doc """
   Sends a stream item to the given target process and waits for a response.
   The target process must be a PID. The payload following in the tuple {:request, item, from}
-  is sent to the target process, where `item` is the item from the GrpcStream and `from` is the
+  is sent to the target process, where `item` is the item from the GRPCStream and `from` is the
   PID of the current process. 
   In other words, the contract is to send {:request, item, from_pid} and wait for a response in the format {:response, msg}
 
   This function also accepts a GenServer module as target. In this case the payload following in the tuple {:request, item}
-  is sent to the target GenServer, where `item` is the item from the GrpcStream.
+  is sent to the target GenServer, where `item` is the item from the GRPCStream.
   In other words, for GenServer's the contract is to send {:request, item} and wait for a response in the format {:response, msg}
   """
   @spec ask(t(), pid | atom, non_neg_integer) :: t() | {:error, item(), reason()}
-  def ask(stream, target, timeout \\ 5000)
-
-  def ask(%__MODULE__{flow: flow} = stream, target, timeout) when is_pid(target) do
-    mapper = fn item ->
-      if Process.alive?(target) do
-        send(target, {:request, item, self()})
-
-        result =
-          receive do
-            {:response, res} -> res
-          after
-            timeout -> {:error, item, :timeout}
-          end
-
-        result
-      else
-        {:error, item, :not_alive}
-      end
-    end
-
-    %__MODULE__{stream | flow: Flow.map(flow, mapper)}
-  end
-
-  def ask(%__MODULE__{flow: flow} = stream, target, timeout) when is_atom(target) do
-    mapper = fn item ->
-      if function_exported?(target, :handle_call, 3) do
-        try do
-          case GenServer.call(target, {:request, item}, timeout) do
-            {:response, res} ->
-              res
-
-            other ->
-              {:error, item,
-               "Expected response from #{inspect(target)} to be in the format {:response, msg}. Found #{inspect(other)}"}
-          end
-        rescue
-          reason ->
-            {:error, item, reason}
-        end
-      else
-        {:error, item, "#{inspect(target)} must implement the GenServer behavior"}
-      end
-    end
-
-    %__MODULE__{stream | flow: Flow.map(flow, mapper)}
-  end
+  defdelegate ask(stream, target, timeout \\ 5000), to: Operators
 
   @doc """
   Same as ask/3 but with side-effects
@@ -241,76 +203,29 @@ defmodule GrpcStream do
   Caution: Prefer to use ask/3 and deal with the different types instead of throwing exceptions.
   """
   @spec ask!(t(), pid | atom, non_neg_integer) :: t()
-  def ask!(stream, target, timeout \\ 5000)
-
-  def ask!(%__MODULE__{flow: flow} = stream, target, timeout) when is_pid(target) do
-    mapper = fn item ->
-      if Process.alive?(target) do
-        send(target, {:request, item, self()})
-
-        result =
-          receive do
-            {:response, res} -> res
-          after
-            timeout ->
-              raise "Timeout waiting for response from #{inspect(target)}"
-          end
-
-        result
-      else
-        raise "Target #{inspect(target)} is not alive. Cannot send request to it."
-      end
-    end
-
-    %__MODULE__{stream | flow: Flow.map(flow, mapper)}
-  end
-
-  def ask!(%__MODULE__{flow: flow} = stream, target, timeout) when is_atom(target) do
-    if not function_exported?(target, :handle_call, 3) do
-      raise ArgumentError, "#{inspect(target)} must implement the GenServer behavior"
-    end
-
-    mapper = fn item ->
-      case GenServer.call(target, {:request, item}, timeout) do
-        {:response, res} ->
-          res
-
-        _ ->
-          raise ArgumentError,
-                "Expected response from #{inspect(target)} to be in the format {:response, msg}"
-      end
-    end
-
-    %__MODULE__{stream | flow: Flow.map(flow, mapper)}
-  end
+  defdelegate ask!(stream, target, timeout \\ 5000), to: Operators
 
   @doc """
   Applies the given function filtering each input in parallel.
   """
   @spec filter(t(), (term -> term)) :: t
-  def filter(%__MODULE__{flow: flow} = stream, filter) do
-    %__MODULE__{stream | flow: Flow.filter(flow, filter)}
-  end
+  defdelegate filter(stream, filter), to: Operators
 
   @doc """
   Applies the given function mapping each input in parallel and
   flattening the result, but only one level deep.
   """
   @spec flat_map(t, (term -> Enumerable.t())) :: t()
-  def flat_map(%__MODULE__{flow: flow} = stream, flat_mapper) do
-    %__MODULE__{stream | flow: Flow.flat_map(flow, flat_mapper)}
-  end
+  defdelegate flat_map(stream, flat_mapper), to: Operators
 
   @doc """
   Applies the given function mapping each input.
   """
   @spec map(t(), (term -> term)) :: t()
-  def map(%__MODULE__{flow: flow} = stream, mapper) do
-    %__MODULE__{stream | flow: Flow.map(flow, mapper)}
-  end
+  defdelegate map(stream, mapper), to: Operators
 
   @doc """
-  Creates a new partition for the given GrpcStream with the given options.
+  Creates a new partition for the given GRPCStream with the given options.
 
   Every time this function is called, a new partition is created.
   It is typically recommended to invoke it before a reducing function,
@@ -318,7 +233,7 @@ defmodule GrpcStream do
   kept together.
 
   However, notice that unnecessary partitioning will increase memory
-  usage and reduce throughput with no benefit whatsoever. GrpcStream takes
+  usage and reduce throughput with no benefit whatsoever. GRPCStream takes
   care of using all cores regardless of the number of times you call
   partition. You should only partition when the problem you are trying
   to solve requires you to route the data around. Such as the problem
@@ -327,9 +242,7 @@ defmodule GrpcStream do
   are typically called "embarrassingly parallel" problems.
   """
   @spec partition(t(), keyword()) :: t()
-  def partition(%__MODULE__{flow: flow} = stream, options \\ []) do
-    %__MODULE__{stream | flow: Flow.partition(flow, options)}
-  end
+  defdelegate partition(stream, options \\ []), to: Operators
 
   @doc """
   Reduces the given values with the given accumulator.
@@ -338,31 +251,23 @@ defmodule GrpcStream do
   the actual accumulator.
   """
   @spec reduce(t, (-> acc), (term, acc -> acc)) :: t when acc: term()
-  def reduce(%__MODULE__{flow: flow} = stream, acc_fun, reducer_fun) do
-    %__MODULE__{stream | flow: Flow.reduce(flow, acc_fun, reducer_fun)}
-  end
+  defdelegate reduce(stream, acc_fun, reducer_fun), to: Operators
 
   @doc """
   Applies the given function rejecting each input in parallel.
   """
   @spec reject(t, (term -> term)) :: t
-  def reject(%__MODULE__{flow: flow} = stream, filter) do
-    %__MODULE__{stream | flow: Flow.reject(flow, filter)}
-  end
+  defdelegate reject(stream, filter), to: Operators
 
   @doc """
   Only emit unique events.
   """
   @spec uniq(t) :: t
-  def uniq(%__MODULE__{flow: flow} = stream) do
-    %__MODULE__{stream | flow: Flow.uniq(flow)}
-  end
+  defdelegate uniq(stream), to: Operators
 
   @doc """
   Only emit events that are unique according to the `by` function.
   """
   @spec uniq_by(t, (term -> term)) :: t
-  def uniq_by(%__MODULE__{flow: flow} = stream, fun) do
-    %__MODULE__{stream | flow: Flow.uniq_by(flow, fun)}
-  end
+  defdelegate uniq_by(stream, fun), to: Operators
 end

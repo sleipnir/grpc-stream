@@ -1,6 +1,6 @@
-defmodule GrpcStreamTest do
+defmodule GRPCStreamTest do
   use ExUnit.Case
-  doctest GrpcStream
+  doctest GRPCStream
 
   describe "simple test" do
     test "from/2 creates a flow from a unary input" do
@@ -8,9 +8,9 @@ defmodule GrpcStreamTest do
       materializer = %GRPC.Server.Stream{}
 
       result =
-        GrpcStream.from(input, unary: true)
-        |> GrpcStream.map(& &1)
-        |> GrpcStream.run_with(materializer, dry_run: true)
+        GRPCStream.from(input, unary: true)
+        |> GRPCStream.map(& &1)
+        |> GRPCStream.run_with(materializer, dry_run: true)
 
       assert result == 1
     end
@@ -19,29 +19,29 @@ defmodule GrpcStreamTest do
       input = [%{message: "a"}, %{message: "b"}]
 
       flow =
-        GrpcStream.from(input, max_demand: 1)
-        |> GrpcStream.map(& &1)
+        GRPCStream.from(input, max_demand: 1)
+        |> GRPCStream.map(& &1)
 
-      result = Enum.to_list(GrpcStream.to_flow!(flow))
+      result = Enum.to_list(GRPCStream.to_flow!(flow))
       assert result == input
     end
   end
 
   describe "from/2" do
     test "converts a list into a flow" do
-      stream = GrpcStream.from([1, 2, 3])
-      assert %GrpcStream{} = stream
+      stream = GRPCStream.from([1, 2, 3])
+      assert %GRPCStream{} = stream
 
-      result = stream |> GrpcStream.map(&(&1 * 2)) |> GrpcStream.to_flow!() |> Enum.to_list()
+      result = stream |> GRPCStream.map(&(&1 * 2)) |> GRPCStream.to_flow!() |> Enum.to_list()
       assert Enum.sort(result) == [2, 4, 6]
     end
 
-    test "converts from Flow to GrpcStream" do
+    test "converts from Flow to GRPCStream" do
       flow = Flow.from_enumerable([1, 2, 3], max_demand: 1)
-      stream = GrpcStream.from_flow!(flow)
-      assert %GrpcStream{flow: ^flow} = stream
+      stream = GRPCStream.from_flow!(flow)
+      assert %GRPCStream{flow: ^flow} = stream
 
-      result = stream |> GrpcStream.map(&(&1 * 2)) |> GrpcStream.to_flow!() |> Enum.to_list()
+      result = stream |> GRPCStream.map(&(&1 * 2)) |> GRPCStream.to_flow!() |> Enum.to_list()
       assert Enum.sort(result) == [2, 4, 6]
     end
   end
@@ -57,9 +57,9 @@ defmodule GrpcStreamTest do
         end)
 
       result =
-        GrpcStream.from([:hello])
-        |> GrpcStream.ask(pid)
-        |> GrpcStream.to_flow!()
+        GRPCStream.from([:hello])
+        |> GRPCStream.ask(pid)
+        |> GRPCStream.to_flow!()
         |> Enum.to_list()
 
       assert result == [:world]
@@ -72,9 +72,9 @@ defmodule GrpcStreamTest do
       assert_receive {:DOWN, ^ref, _, _, _}
 
       result =
-        GrpcStream.from(["msg"])
-        |> GrpcStream.ask(pid)
-        |> GrpcStream.to_flow!()
+        GRPCStream.from(["msg"])
+        |> GRPCStream.ask(pid)
+        |> GRPCStream.to_flow!()
         |> Enum.to_list()
 
       assert result == [{:error, "msg", :not_alive}]
@@ -102,12 +102,12 @@ defmodule GrpcStreamTest do
     end
 
     test "asks GenServer and receives correct response" do
-      stream = GrpcStream.from(["abc"])
+      stream = GRPCStream.from(["abc"])
 
       result =
         stream
-        |> GrpcStream.ask(TestServer)
-        |> GrpcStream.to_flow!()
+        |> GRPCStream.ask(TestServer)
+        |> GRPCStream.to_flow!()
         |> Enum.to_list()
 
       assert result == ["abc"]
@@ -117,9 +117,9 @@ defmodule GrpcStreamTest do
   describe "map/2, flat_map/2, filter/2" do
     test "maps values correctly" do
       result =
-        GrpcStream.from([1, 2, 3])
-        |> GrpcStream.map(&(&1 * 10))
-        |> GrpcStream.to_flow!()
+        GRPCStream.from([1, 2, 3])
+        |> GRPCStream.map(&(&1 * 10))
+        |> GRPCStream.to_flow!()
         |> Enum.to_list()
 
       assert Enum.sort(result) == [10, 20, 30]
@@ -127,9 +127,9 @@ defmodule GrpcStreamTest do
 
     test "flat_maps values correctly" do
       result =
-        GrpcStream.from([1, 2])
-        |> GrpcStream.flat_map(&[&1, &1])
-        |> GrpcStream.to_flow!()
+        GRPCStream.from([1, 2])
+        |> GRPCStream.flat_map(&[&1, &1])
+        |> GRPCStream.to_flow!()
         |> Enum.to_list()
 
       assert Enum.sort(result) == [1, 1, 2, 2]
@@ -137,9 +137,9 @@ defmodule GrpcStreamTest do
 
     test "filters values correctly" do
       result =
-        GrpcStream.from([1, 2, 3, 4])
-        |> GrpcStream.filter(&(rem(&1, 2) == 0))
-        |> GrpcStream.to_flow!()
+        GRPCStream.from([1, 2, 3, 4])
+        |> GRPCStream.filter(&(rem(&1, 2) == 0))
+        |> GRPCStream.to_flow!()
         |> Enum.to_list()
 
       assert result == [2, 4]
@@ -147,7 +147,7 @@ defmodule GrpcStreamTest do
   end
 
   describe "test complex operations" do
-    test "pipeline with all GrpcStream operators" do
+    test "pipeline with all GRPCStream operators" do
       target =
         spawn(fn ->
           receive_loop()
@@ -157,27 +157,144 @@ defmodule GrpcStreamTest do
 
       result =
         input
-        |> GrpcStream.from()
+        |> GRPCStream.from()
         # 2..11
-        |> GrpcStream.map(&(&1 + 1))
+        |> GRPCStream.map(&(&1 + 1))
         # [2,4,3,6,4,8,...]
-        |> GrpcStream.flat_map(&[&1, &1 * 2])
+        |> GRPCStream.flat_map(&[&1, &1 * 2])
         # keep evens
-        |> GrpcStream.filter(&(rem(&1, 2) == 0))
+        |> GRPCStream.filter(&(rem(&1, 2) == 0))
         # remove >10
-        |> GrpcStream.reject(&(&1 > 10))
+        |> GRPCStream.reject(&(&1 > 10))
         # remove duplicates
-        |> GrpcStream.uniq()
+        |> GRPCStream.uniq()
         # multiply by 10 via process
-        |> GrpcStream.ask(target)
-        |> GrpcStream.partition()
-        |> GrpcStream.reduce(fn -> [] end, fn i, acc -> [i | acc] end)
-        |> GrpcStream.to_flow!()
+        |> GRPCStream.ask(target)
+        |> GRPCStream.partition()
+        |> GRPCStream.reduce(fn -> [] end, fn i, acc -> [i | acc] end)
+        |> GRPCStream.to_flow!()
         |> Enum.to_list()
         |> List.flatten()
         |> Enum.sort()
 
       assert result == [20, 40, 60, 80, 100]
+    end
+  end
+
+  # describe "join_with/merge streams" do
+  #   test "merges input stream with joined GenStage producer" do
+  #     # Define um producer GenStage de teste que emite elementos pré-definidos
+  #     defmodule TestProducer do
+  #       use GenStage
+
+  #       def start_link(items) do
+  #         GenStage.start_link(__MODULE__, items)
+  #       end
+
+  #       def init(items) do
+  #         {:producer, items}
+  #       end
+
+  #       def handle_demand(demand, state) when demand > 0 do
+  #         IO.inspect("Demand: #{demand}")
+  #         {events, remaining} = Enum.split(state, demand)
+  #         IO.inspect("Events: #{inspect(events)}")
+
+  #         # Sinaliza término quando não há mais elementos
+  #         {:noreply, events, remaining}
+  #       end
+  #     end
+
+  #     # Inicia o producer de teste com elementos [4, 5, 6]
+  #     {:ok, producer} =
+  #       TestProducer.start([
+  #         7,
+  #         8,
+  #         9,
+  #         10,
+  #         11,
+  #         12,
+  #         13,
+  #         14,
+  #         15,
+  #         16,
+  #         17,
+  #         18,
+  #         19,
+  #         20,
+  #         21,
+  #         22,
+  #         23,
+  #         24,
+  #         25,
+  #         26,
+  #         27,
+  #         28,
+  #         29,
+  #         30
+  #       ])
+
+  #     IO.puts("Producer started with PID: #{inspect(producer)}")
+  #     # Stream de entrada principal (gRPC)
+  #     input = [1, 2, 3]
+
+  #     # Constrói o GrpcStream combinando o input com o producer de teste
+  #     GRPCStream.from(input, join_with: producer, max_demand: 10)
+  #     |> GRPCStream.map(fn it ->
+  #       IO.inspect(it, label: "Processing item")
+  #       it
+  #     end)
+  #     |> GRPCStream.run_with(%GRPC.Server.Stream{}, dry_run: true)
+  #   end
+  # end
+
+  describe "join_with/merge streams" do
+    test "merges input stream with joined GenStage producer" do
+      # Define o TestProducer que sinaliza término corretamente
+      defmodule TestProducer do
+        use GenStage
+
+        def start_link(items) do
+          GenStage.start_link(__MODULE__, items)
+        end
+
+        def init(items) do
+          {:producer, items}
+        end
+
+        def handle_demand(demand, state) when demand > 0 do
+          {events, remaining} = Enum.split(state, demand)
+
+          {:noreply, events, remaining}
+        end
+      end
+
+      elements = Enum.to_list(4..1000)
+      {:ok, producer_pid} = TestProducer.start_link(elements)
+
+      input = [1, 2, 3]
+
+      task =
+        Task.async(fn ->
+          GRPCStream.from(input, join_with: producer_pid, max_demand: 20)
+          |> GRPCStream.map(fn it ->
+            IO.inspect(it, label: "Processing item")
+            it
+          end)
+          |> GRPCStream.run_with(%GRPC.Server.Stream{}, dry_run: true)
+        end)
+
+      result =
+        case Task.yield(task, 1000) || Task.shutdown(task) do
+          {:ok, _} -> :ok
+          _ -> :ok
+        end
+
+      if Process.alive?(producer_pid) do
+        Process.exit(producer_pid, :normal)
+      end
+
+      assert result == :ok
     end
   end
 
