@@ -5,6 +5,7 @@ defmodule StreamServer.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      StreamServer.TransformerServer,
       GrpcReflection,
       {GRPC.Server.Supervisor, endpoint: StreamServer.Endpoint, port: 50051, start_server: true}
     ]
