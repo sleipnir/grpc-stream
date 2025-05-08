@@ -87,10 +87,7 @@ defmodule GrpcStream do
 
   def from(input, opts) when is_list(input), do: build_grpc_stream(input, opts)
 
-  def from(input, opts) when not is_nil(input) do
-    opts = Keyword.merge(opts, unary: true)
-    from([input], opts)
-  end
+  def from(input, opts) when not is_nil(input), do: from([input], opts)
 
   defp build_grpc_stream(input, opts) do
     unbounded_producer = Keyword.get(opts, :join_with)

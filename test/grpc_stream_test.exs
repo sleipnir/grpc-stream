@@ -7,7 +7,7 @@ defmodule GrpcStreamTest do
       input = 1
 
       result =
-        GrpcStream.from(input, max_demand: 1)
+        GrpcStream.from(input, unary: true)
         |> GrpcStream.map(& &1)
         |> GrpcStream.materialize(%GRPC.Server.Stream{}, dry_run: true)
 
@@ -18,7 +18,7 @@ defmodule GrpcStreamTest do
       input = [%{message: "a"}, %{message: "b"}]
 
       flow =
-        GrpcStream.from(input)
+        GrpcStream.from(input, max_demand: 1)
         |> GrpcStream.map(& &1)
 
       result = Enum.to_list(GrpcStream.to_flow!(flow))
