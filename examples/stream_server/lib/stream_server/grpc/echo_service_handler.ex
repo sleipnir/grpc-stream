@@ -23,7 +23,7 @@ defmodule StreamServer.GRPC.EchoServiceHandler do
   end
 
   def say_bid_stream_hello(request, stream) do
-    GrpcStream.from(request)
+    GrpcStream.from(request, max_demand: 12500)
     |> GrpcStream.map(fn %HelloRequest{} = hello ->
       %HelloReply{message: "Welcome #{hello.name}"}
     end)
