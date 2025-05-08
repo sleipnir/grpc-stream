@@ -21,7 +21,7 @@ defmodule GrpcStream do
             # Process the incoming note
             # and prepare a response
           end)
-          |> GrpcStream.materialize(stream)
+          |> GrpcStream.run_with(stream)
         end
       end
 
@@ -41,7 +41,7 @@ defmodule GrpcStream do
 
           GrpcStream.from(input, join_with: rabbit_producer, max_demand: 10)
           |> Flow.map(&transform_event/1)
-          |> GrpcStream.materialize(stream)
+          |> GrpcStream.run_with(stream)
         end
 
         defp transform_event({_, grpc_msg}), do: grpc_msg
@@ -141,11 +141,11 @@ defmodule GrpcStream do
 
   ## Example
 
-      GrpcStream.materialize(flow, stream)
+      GrpcStream.run_with(flow, stream)
 
   """
-  @spec materialize(t(), Stream.t(), Keyword.t()) :: :ok | any()
-  def materialize(
+  @spec run_with(t(), Stream.t(), Keyword.t()) :: :ok | any()
+  def run_with(
         %__MODULE__{flow: flow, options: flow_opts} = _stream,
         %Stream{} = from,
         opts \\ []

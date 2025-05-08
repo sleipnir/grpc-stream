@@ -37,17 +37,17 @@ defmodule StreamServer.GRPC.EchoServiceHandler do
   alias StreamServer.TransformerServer
 
   @spec say_unary_hello(HelloRequest.t(), GRPC.Server.Stream.t()) :: any()
-  def say_unary_hello(request, stream) do
+  def say_unary_hello(request, materializer) do
     GrpcStream.from(request, unary: true)
     |> GrpcStream.ask(TransformerServer) # call GenServer and get response
     |> GrpcStream.map(fn %HelloReply{} = reply ->
       %HelloReply{message: "[Reply] #{reply.message}"}
     end)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(materializer)
   end
 
   @spec say_server_hello(HelloRequest.t(), GRPC.Server.Stream.t()) :: any()
-  def say_server_hello(request, stream) do
+  def say_server_hello(request, materializer) do
     # simulate a infinite stream of data
     # this is a simple example, in a real world application
     # you would probably use a GenStage or similar
@@ -66,16 +66,16 @@ defmodule StreamServer.GRPC.EchoServiceHandler do
       output_item ->
         output_item
     end)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(materializer)
   end
 
   @spec say_bid_stream_hello(Elixir.Stream.t(), GRPC.Server.Stream.t()) :: any()
-  def say_bid_stream_hello(request, stream) do
+  def say_bid_stream_hello(request, materializer) do
     GrpcStream.from(request, max_demand: 12500)
     |> GrpcStream.map(fn %HelloRequest{} = hello ->
       %HelloReply{message: "Welcome #{hello.name}"}
     end)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(materializer)
   end
 end
 ```

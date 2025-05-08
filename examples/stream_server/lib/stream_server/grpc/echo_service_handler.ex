@@ -15,7 +15,7 @@ defmodule StreamServer.GRPC.EchoServiceHandler do
     |> GrpcStream.map(fn %HelloReply{} = reply ->
       %HelloReply{message: "[Reply] #{reply.message}"}
     end)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(stream)
   end
 
   @spec say_server_hello(HelloRequest.t(), GRPC.Server.Stream.t()) :: any()
@@ -38,15 +38,15 @@ defmodule StreamServer.GRPC.EchoServiceHandler do
       output_item ->
         output_item
     end)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(stream)
   end
 
-  @spec say_bid_stream_hello(Elixir.Stream.t(), GRPC.Server.Stream.t()) :: any()
+  @spec say_bid_stream_hello(Enumerable.t(), GRPC.Server.Stream.t()) :: any()
   def say_bid_stream_hello(request, stream) do
     GrpcStream.from(request, max_demand: 12500)
     |> GrpcStream.map(fn %HelloRequest{} = hello ->
       %HelloReply{message: "Welcome #{hello.name}"}
     end)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(stream)
   end
 end

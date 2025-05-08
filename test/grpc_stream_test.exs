@@ -5,11 +5,12 @@ defmodule GrpcStreamTest do
   describe "simple test" do
     test "from/2 creates a flow from a unary input" do
       input = 1
+      materializer = %GRPC.Server.Stream{}
 
       result =
         GrpcStream.from(input, unary: true)
         |> GrpcStream.map(& &1)
-        |> GrpcStream.materialize(%GRPC.Server.Stream{}, dry_run: true)
+        |> GrpcStream.run_with(materializer, dry_run: true)
 
       assert result == 1
     end

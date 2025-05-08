@@ -33,13 +33,13 @@ defmodule MyGRPCService do
   use GRPC.Server, service: MyService.Service
   alias GrpcStream
 
-  def route_chat(req_enum, stream) do
-    GrpcStream.from(req_enum, max_demand: 10)
+  def route_chat(request, materializer) do
+    GrpcStream.from(request, max_demand: 10)
     |> GrpcStream.map(fn note ->
       # Process incoming gRPC message
       %MyProto.Note{message: "[echo] #{note.message}"}
     end)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(materializer)
   end
 end
 ``` 
@@ -53,12 +53,12 @@ defmodule MyGRPCService do
   use GRPC.Server, service: MyService.Service
   alias GrpcStream
 
-  def stream_events(req_enum, stream) do
+  def stream_events(request, materializer) do
     {:ok, rabbit_producer} = MyApp.RabbitMQ.Producer.start_link([])
 
-    GrpcStream.from(req_enum, join_with: rabbit_producer, max_demand: 10)
+    GrpcStream.from(request, join_with: rabbit_producer, max_demand: 10)
     |> GrpcStream.map(&transform_event/1)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(materializer)
   end
 
   defp transform_event({_, grpc_msg}), do: grpc_msg
@@ -85,7 +85,7 @@ end
 defmodule MyGRPCService do
   use GRPC.Server, service: Chat.Service
   
-  def chat_stream(req_enum, stream) do
+  def chat_stream(req_enum, materializer) do
     handler_pid = ChatHandler.start()
     
     GrpcStream.from(req_enum)
@@ -94,7 +94,7 @@ defmodule MyGRPCService do
       {:error, :timeout} -> %ChatMsg{text: "Server timeout!"}
       response -> %ChatMsg{text: response}
     end)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(materializer)
   end
 end
 ```
@@ -120,16 +120,17 @@ end
 defmodule MyGRPCService do
   use GRPC.Server, service: Analytics.Service
   
-  def event_stream(req_enum, stream) do
+  @spec event_stream(any(), GRPC.Server.Stream.t()) :: any()
+  def event_stream(request, materializer) do
     AnalyticsServer.start_link()
     
-    GrpcStream.from(req_enum)
-    |> GrpcStream.ask(AnalyticsServer, 10_000)  # GenServer version
+    GrpcStream.from(request)
+    |> GrpcStream.ask(AnalyticsServer, 10_000)
     |> GrpcStream.map(fn
       {:error, :timeout} -> %AnalyticEvent{status: :TIMEOUT}
       result -> %AnalyticEvent{data: result}
     end)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(materializer)
   end
 end
 ```
@@ -146,7 +147,6 @@ defmodule TransactionService do
   end
   
   defp validate_transaction(tx) do
-    # Complex validation logic
     :timer.sleep(500)
     %TransactionResult{valid: true}
   end
@@ -155,20 +155,20 @@ end
 defmodule MyGRPCService do
   use GRPC.Server, service: Transaction.Service
   
-  def process_transactions(req_enum, stream) do
+  def process_transactions(request, materializer) do
     {:ok, kafka_producer} = MyApp.KafkaProducer.start_link()
-    TransactionService.start_link()
+    TransactionService.start_link() # or start in another place
     
     GrpcStream.from(req_enum, 
       join_with: kafka_producer,
       max_demand: 20
     )
-    |> GrpcStream.ask(TransactionService)  # Validate via GenServer
+    |> GrpcStream.ask(TransactionService) # Validate via GenServer
     |> GrpcStream.filter(fn
       %TransactionResult{valid: true} -> true
       _ -> false
     end)
-    |> GrpcStream.materialize(stream)
+    |> GrpcStream.run_with(materializer)
   end
 end
 ``` 
