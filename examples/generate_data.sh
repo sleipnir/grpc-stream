@@ -1,7 +1,7 @@
 #!/bin/bash
 
 OUT="bulk_input.json"
-> "$OUT" # limpa o arquivo
+> "$OUT"
 
 for i in $(seq 1 100000); do
   echo "{\"name\": \"User$i\"}" >> "$OUT"

@@ -1,21 +1,31 @@
 # StreamServer
 
-**TODO: Add description**
+## Start gRPC Server
 
-## Installation
+```bash
+iex -S mix
+``` 
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `stream_server` to your list of dependencies in `mix.exs`:
+## Send unary request
 
-```elixir
-def deps do
-  [
-    {:stream_server, "~> 0.1.0"}
-  ]
-end
-```
+```bash
+grpcurl -plaintext -d '{"name": "Joe"}' localhost:50051 stream.EchoServer/SayUnaryHello
+``` 
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/stream_server>.
+## Send Server stream request
 
+```bash
+grpcurl -plaintext -d '{"name": "Valim"}' localhost:50051 stream.EchoServer/SayServerHello
+``` 
+
+## Send Streamed request
+
+1. Generate fake data
+```bash
+./generate_data.sh
+``` 
+
+2. Make request
+```bash
+cat bulk_input.json | grpcurl -plaintext -d @ localhost:50051 stream.EchoServer/SayBidStreamHello
+``` 
