@@ -70,6 +70,7 @@ defmodule GrpcStream do
   ## Options
 
     - `:join_with` - (optional) An additional producer stage PID to include in the Flow.
+    - `:unary` - Required if you want to use pipelines for unary grpc requests. Default `false`.
 
   ## Returns
 
@@ -90,19 +91,21 @@ defmodule GrpcStream do
   def from(input, opts) when not is_nil(input), do: from([input], opts)
 
   defp build_grpc_stream(input, opts) do
-    unbounded_producer = Keyword.get(opts, :join_with)
+    flow =
+      case Keyword.get(opts, :join_with) do
+        pid when is_pid(pid) ->
+          {:ok, input_pid} = GRPCStream.Producer.start_link(input, opts)
+          Flow.from_stages([input_pid, pid], opts)
 
-    case unbounded_producer do
-      unbounded_pid when is_pid(unbounded_pid) ->
-        {:ok, pid} = GRPCStream.Producer.start_link(input, opts)
+        # handle Elixir.Stream joining
+        other when is_list(other) or is_function(other) ->
+          Flow.from_enumerables([input, other], opts)
 
-        flow = Flow.from_stages([pid, unbounded_pid], opts)
-        %__MODULE__{flow: flow, options: opts}
+        _ ->
+          Flow.from_enumerable(input, opts)
+      end
 
-      _ ->
-        flow = Flow.from_enumerable(input, opts)
-        %__MODULE__{flow: flow, options: opts}
-    end
+    %__MODULE__{flow: flow, options: opts}
   end
 
   @doc """
@@ -147,23 +150,21 @@ defmodule GrpcStream do
         %Stream{} = from,
         opts \\ []
       ) do
-    is_dry_run? = Keyword.get(opts, :dry_run, false)
-    is_unary? = Keyword.get(flow_opts, :unary, false)
+    dry_run? = Keyword.get(opts, :dry_run, false)
+    unary? = Keyword.get(flow_opts, :unary, false)
 
-    case is_unary? do
-      true ->
+    if unary? do
+      flow
+      |> Enum.to_list()
+      |> List.flatten()
+      |> List.first()
+    else
+      flow
+      |> Flow.map(fn msg ->
+        unless dry_run?, do: send_response(from, msg)
         flow
-        |> Enum.to_list()
-        |> List.flatten()
-        |> List.first()
-
-      _ ->
-        flow
-        |> Flow.map(fn msg ->
-          if is_dry_run?, do: :nothing, else: send_response(from, msg)
-          flow
-        end)
-        |> Flow.run()
+      end)
+      |> Flow.run()
     end
   end
 
