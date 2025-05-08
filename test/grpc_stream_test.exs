@@ -181,76 +181,8 @@ defmodule GRPCStreamTest do
     end
   end
 
-  # describe "join_with/merge streams" do
-  #   test "merges input stream with joined GenStage producer" do
-  #     # Define um producer GenStage de teste que emite elementos pré-definidos
-  #     defmodule TestProducer do
-  #       use GenStage
-
-  #       def start_link(items) do
-  #         GenStage.start_link(__MODULE__, items)
-  #       end
-
-  #       def init(items) do
-  #         {:producer, items}
-  #       end
-
-  #       def handle_demand(demand, state) when demand > 0 do
-  #         IO.inspect("Demand: #{demand}")
-  #         {events, remaining} = Enum.split(state, demand)
-  #         IO.inspect("Events: #{inspect(events)}")
-
-  #         # Sinaliza término quando não há mais elementos
-  #         {:noreply, events, remaining}
-  #       end
-  #     end
-
-  #     # Inicia o producer de teste com elementos [4, 5, 6]
-  #     {:ok, producer} =
-  #       TestProducer.start([
-  #         7,
-  #         8,
-  #         9,
-  #         10,
-  #         11,
-  #         12,
-  #         13,
-  #         14,
-  #         15,
-  #         16,
-  #         17,
-  #         18,
-  #         19,
-  #         20,
-  #         21,
-  #         22,
-  #         23,
-  #         24,
-  #         25,
-  #         26,
-  #         27,
-  #         28,
-  #         29,
-  #         30
-  #       ])
-
-  #     IO.puts("Producer started with PID: #{inspect(producer)}")
-  #     # Stream de entrada principal (gRPC)
-  #     input = [1, 2, 3]
-
-  #     # Constrói o GrpcStream combinando o input com o producer de teste
-  #     GRPCStream.from(input, join_with: producer, max_demand: 10)
-  #     |> GRPCStream.map(fn it ->
-  #       IO.inspect(it, label: "Processing item")
-  #       it
-  #     end)
-  #     |> GRPCStream.run_with(%GRPC.Server.Stream{}, dry_run: true)
-  #   end
-  # end
-
   describe "join_with/merge streams" do
     test "merges input stream with joined GenStage producer" do
-      # Define o TestProducer que sinaliza término corretamente
       defmodule TestProducer do
         use GenStage
 
