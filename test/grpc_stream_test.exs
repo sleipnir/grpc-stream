@@ -3,16 +3,41 @@ defmodule GRPCStreamTest do
   doctest GRPCStream
 
   describe "simple test" do
-    test "from/2 creates a flow from a unary input" do
-      input = 1
+    defmodule TestInput do
+      defstruct [:message]
+    end
+
+    defmodule FakeAdapter do
+      def get_headers(_), do: %{"content-type" => "application/grpc"}
+    end
+
+    test "single/2 creates a flow from a unary input" do
+      input = %TestInput{message: 1}
       materializer = %GRPC.Server.Stream{}
 
       result =
-        GRPCStream.from(input, unary: true)
+        GRPCStream.single(input)
         |> GRPCStream.map(& &1)
         |> GRPCStream.run_with(materializer, dry_run: true)
 
-      assert result == 1
+      assert result == input
+    end
+
+    test "single_with_ctx/3 creates a flow with metadata" do
+      input = %TestInput{message: 1}
+      materializer = %GRPC.Server.Stream{adapter: FakeAdapter}
+
+      flow =
+        GRPCStream.single_as_ctx(input, materializer)
+        |> GRPCStream.map_with_ctx(fn meta, item ->
+          assert not is_nil(meta)
+          assert is_map(meta)
+          assert ^meta = %{"content-type" => "application/grpc"}
+          item
+        end)
+
+      result = Enum.to_list(GRPCStream.to_flow!(flow)) |> Enum.at(0)
+      assert result == input
     end
 
     test "from/2 creates a flow from enumerable input" do
@@ -21,6 +46,23 @@ defmodule GRPCStreamTest do
       flow =
         GRPCStream.from(input, max_demand: 1)
         |> GRPCStream.map(& &1)
+
+      result = Enum.to_list(GRPCStream.to_flow!(flow))
+      assert result == input
+    end
+
+    test "from_as_ctx/3 creates a flow from enumerable input" do
+      input = [%{message: "a"}, %{message: "b"}]
+      materializer = %GRPC.Server.Stream{adapter: FakeAdapter}
+
+      flow =
+        GRPCStream.from_as_ctx(input, materializer)
+        |> GRPCStream.map_with_ctx(fn meta, item ->
+          assert not is_nil(meta)
+          assert is_map(meta)
+          assert ^meta = %{"content-type" => "application/grpc"}
+          item
+        end)
 
       result = Enum.to_list(GRPCStream.to_flow!(flow))
       assert result == input
@@ -208,9 +250,9 @@ defmodule GRPCStreamTest do
 
       task =
         Task.async(fn ->
-          GRPCStream.from(input, join_with: producer_pid, max_demand: 20)
+          GRPCStream.from(input, join_with: producer_pid, max_demand: 500)
           |> GRPCStream.map(fn it ->
-            IO.inspect(it, label: "Processing item")
+            #IO.inspect(it, label: "Processing item by Worker #{inspect(self())}")
             it
           end)
           |> GRPCStream.run_with(%GRPC.Server.Stream{}, dry_run: true)

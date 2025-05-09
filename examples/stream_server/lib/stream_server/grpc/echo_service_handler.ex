@@ -11,7 +11,7 @@ defmodule StreamServer.GRPC.EchoServiceHandler do
   @spec say_unary_hello(HelloRequest.t(), GRPC.Server.Stream.t()) :: any()
   def say_unary_hello(request, materializer) do
     GRPCStream.single(request)
-    |> GRPCStream.ask(TransformerServer) 
+    |> GRPCStream.ask(TransformerServer)
     |> GRPCStream.map(fn %HelloReply{} = reply ->
       %HelloReply{message: "[Reply] #{reply.message}"}
     end)
